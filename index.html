@@ -17,19 +17,19 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- daisyUI -->
   <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.5/dist/full.css" rel="stylesheet"/>
-  <!-- Alpine.js -->
-  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
-  <!-- noUiSlider CSS and JS -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.js"></script>
   <!-- Leaflet CSS and JS (for the map) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" crossorigin="" defer></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" integrity="sha256-kLaT2GOSpHechhsozzB+flnD+zUyjE2LlfWPgU04xyI=" crossorigin="anonymous"/>
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" integrity="sha256-WBkoXOwTeyKclOHuWtc+i2uENFpDZ9YPdf5Hf+D7ewM=" crossorigin="anonymous"></script>
   <!-- Google Fonts: Lobster and Material Icons -->
   <link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
   <!-- Google OAuth -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <!-- Alpine.js -->
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <!-- noUiSlider CSS and JS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.js"></script>
   <style>
     .transition-transform { transition: transform 0.3s ease; }
     .title { font-family: 'Lobster', cursive; }
@@ -60,6 +60,14 @@
         Alpine.data('parkingApp', parkingApp);
       } else {
         console.error('Leaflet not loaded');
+        // Retry after a short delay
+        setTimeout(() => {
+          if (typeof L !== 'undefined') {
+            Alpine.data('parkingApp', parkingApp);
+          } else {
+            console.error('Leaflet still not loaded after retry');
+          }
+        }, 1000);
       }
     });
   </script>
@@ -766,15 +774,40 @@
         
         // Initialize the Leaflet map
         initMap() {
-          // Center on Münster with a moderate zoom
-          this.map = L.map('map', {
-            center: [51.9625, 7.6257],
-            zoom: 13
-          });
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19
-          }).addTo(this.map);
-          this.updateMapMarkers();
+          try {
+            if (typeof L === 'undefined') {
+              console.error('Leaflet is not loaded');
+              return;
+            }
+            
+            if (this.map) {
+              this.map.remove();
+            }
+            
+            // Center on Münster with a moderate zoom
+            this.map = L.map('map', {
+              center: [51.9625, 7.6257],
+              zoom: 13,
+              zoomControl: true
+            });
+
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+              maxZoom: 19,
+              attribution: '© OpenStreetMap contributors'
+            }).addTo(this.map);
+
+            // Force a map refresh
+            setTimeout(() => {
+              if (this.map) {
+                this.map.invalidateSize();
+              }
+            }, 100);
+
+            this.updateMapMarkers();
+          } catch (error) {
+            console.error('Error initializing map:', error);
+          }
         },
         
         // Show/hide the map and fix partial rendering
@@ -783,7 +816,11 @@
           if (this.showMap) {
             this.$nextTick(() => {
               setTimeout(() => {
-                this.map.invalidateSize();
+                if (this.map) {
+                  this.map.invalidateSize();
+                } else {
+                  this.initMap();
+                }
               }, 100);
             });
           }

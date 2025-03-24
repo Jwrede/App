@@ -70,10 +70,10 @@ self.addEventListener('fetch', event => {
         // Clone the request because it can only be used once
         const fetchRequest = event.request.clone();
 
-        // For external resources, use no-cors mode
+        // For external resources, try to fetch without caching
         if (externalResources.includes(event.request.url)) {
           return fetch(fetchRequest, { 
-            mode: 'no-cors',
+            mode: 'cors',
             credentials: 'omit'
           });
         }
