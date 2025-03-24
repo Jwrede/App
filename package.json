@@ -1,0 +1,14 @@
+{
+  "name": "s-park",
+  "version": "1.0.0",
+  "description": "Smart parking spot finder and reservation system",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "generate-icons": "node generate-icons.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "sharp": "^0.32.1"
+  }
+} 

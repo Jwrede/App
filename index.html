@@ -1,0 +1,1090 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>S-park</title>
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#2563eb"/>
+  <meta name="description" content="Smart parking spot finder and reservation system"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black"/>
+  <meta name="apple-mobile-web-app-title" content="S-park"/>
+  <link rel="apple-touch-icon" href="icons/icon-192x192.png"/>
+  <link rel="manifest" href="manifest.json"/>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- daisyUI -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@2.51.5/dist/full.css" rel="stylesheet"/>
+  <!-- Alpine.js -->
+  <script src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <!-- noUiSlider CSS and JS -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/noUiSlider/15.7.0/nouislider.min.js"></script>
+  <!-- Leaflet CSS and JS (for the map) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.3/dist/leaflet.css" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.3/dist/leaflet.js" crossorigin="" defer></script>
+  <!-- Google Fonts: Lobster and Material Icons -->
+  <link href="https://fonts.googleapis.com/css2?family=Lobster&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  <!-- Google OAuth -->
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    .transition-transform { transition: transform 0.3s ease; }
+    .title { font-family: 'Lobster', cursive; }
+    [x-cloak] { display: none; }
+    /* Fixed height for the map */
+    #map {
+      width: 100%;
+      height: 300px;
+    }
+  </style>
+  <script>
+    // Register Service Worker
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(registration => {
+            console.log('ServiceWorker registration successful');
+          })
+          .catch(err => {
+            console.log('ServiceWorker registration failed: ', err);
+          });
+      });
+    }
+
+    // Wait for Leaflet to load before initializing Alpine
+    window.addEventListener('load', () => {
+      if (typeof L !== 'undefined') {
+        Alpine.data('parkingApp', parkingApp);
+      } else {
+        console.error('Leaflet not loaded');
+      }
+    });
+  </script>
+</head>
+<body class="bg-gray-100 p-4 min-h-screen">
+  <div x-data="parkingApp()" x-init="$nextTick(() => { if (typeof L !== 'undefined') initMap() })" class="container mx-auto min-h-screen">
+    <!-- Toggle Map Button -->
+    <button
+      @click="toggleMap()"
+      class="btn btn-outline w-full mb-4 flex items-center justify-center"
+    >
+      <i class="material-icons mr-2">map</i>
+      Toggle Map
+    </button>
+
+    <!-- Collapsible Map Container -->
+    <div x-show="showMap" x-cloak class="relative mb-4">
+      <div id="map"></div>
+    </div>
+
+    <!-- Header: Title, History Button, and Add Spot Button -->
+    <div class="flex items-center justify-between mb-6">
+      <h1 class="text-5xl font-bold title text-blue-600">S-park</h1>
+      <div class="flex items-center space-x-2">
+        <template x-if="isAuthenticated">
+          <div class="flex items-center space-x-2">
+            <span class="text-sm" x-text="currentUser.name"></span>
+            <button @click="logout()" class="btn btn-circle btn-outline">
+              <i class="material-icons">logout</i>
+            </button>
+          </div>
+        </template>
+        <template x-if="!isAuthenticated">
+          <button @click="showLoginModal = true" class="btn btn-circle btn-outline">
+            <i class="material-icons">login</i>
+          </button>
+        </template>
+        <button @click="checkAuthAndShowHistory()" class="btn btn-circle btn-outline">
+          <i class="material-icons">history</i>
+        </button>
+        <button @click="showAddModal = true" class="btn btn-circle btn-outline">
+          <i class="material-icons">add</i>
+        </button>
+      </div>
+    </div>
+
+    <!-- Top Filter Controls -->
+    <div class="flex flex-col md:flex-row items-center gap-2 mb-4">
+      <input
+        type="text"
+        x-model="searchQuery"
+        placeholder="Search by any attribute..."
+        class="input input-bordered flex-grow"
+      />
+      <select x-model="filterStatus" class="select select-bordered">
+        <option value="All">All</option>
+        <option value="Fully Available">Fully Available</option>
+        <option value="Available">Available</option>
+        <option value="Occupied">Occupied</option>
+      </select>
+      <button
+        @click="showAdvancedFilters = !showAdvancedFilters"
+        class="btn btn-outline btn-sm"
+      >
+        <i
+          class="material-icons"
+          :class="{'rotate-90': showAdvancedFilters}"
+          style="transition: transform 0.3s ease;"
+          >filter_list</i
+        >
+      </button>
+    </div>
+
+    <!-- Advanced Filter Controls (Collapsible) -->
+    <div 
+      x-show="showAdvancedFilters" 
+      x-cloak 
+      x-transition:enter="transition ease-out duration-200"
+      x-transition:enter-start="opacity-0"
+      x-transition:enter-end="opacity-100"
+      x-transition:leave="transition ease-in duration-200"
+      x-transition:leave-start="opacity-100"
+      x-transition:leave-end="opacity-0"
+      class="flex flex-col md:flex-row items-center gap-2 mb-6"
+      style="min-height: 0;"
+    >
+      <input
+        type="number"
+        step="0.1"
+        x-model.number="filterMaxDistance"
+        placeholder="Max Distance (miles)"
+        class="input input-bordered flex-grow"
+      />
+      <input
+        type="number"
+        step="0.01"
+        x-model.number="filterMaxRate"
+        placeholder="Max Rate ($/hour)"
+        class="input input-bordered flex-grow"
+      />
+      <input
+        type="text"
+        x-model="filterFeatures"
+        placeholder="Filter by features"
+        class="input input-bordered flex-grow"
+      />
+      <input
+        type="number"
+        x-model.number="filterMinCapacity"
+        placeholder="Min Available Slots"
+        class="input input-bordered flex-grow"
+      />
+      <label class="flex items-center gap-1">
+        <input type="checkbox" class="checkbox" x-model="filterFavorites" />
+        <i
+          class="material-icons"
+          :class="{'text-red-500': filterFavorites, 'text-gray-400': !filterFavorites}"
+          >favorite</i
+        >
+        <span class="text-sm">Favorites Only</span>
+      </label>
+    </div>
+
+    <!-- Parking Spot Cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <template
+        x-for="spot in spots.filter(spot => filterSpots(spot))"
+        :key="spot.id"
+      >
+        <div
+          :id="'spot-' + spot.id"
+          class="card shadow-lg bg-white h-[32rem] overflow-hidden"
+        >
+          <figure class="h-48">
+            <img
+              :src="spot.image"
+              :alt="spot.name"
+              class="w-full h-full object-cover"
+            />
+          </figure>
+          <div class="card-body overflow-y-auto">
+            <div class="flex items-center justify-between">
+              <h2 class="card-title" x-text="spot.name"></h2>
+              <button @click="spot.favorite = !spot.favorite" class="btn btn-ghost">
+                <i
+                  class="material-icons"
+                  :class="{'text-red-500': spot.favorite, 'text-gray-400': !spot.favorite}"
+                  >favorite</i
+                >
+              </button>
+            </div>
+            <p>
+              <i class="material-icons inline-block text-sm mr-1">info</i>
+              <span class="font-bold">Status:</span>
+              <span class="badge" :class="spot.available > 0 ? 'badge-success' : 'badge-error'">
+                <span x-text="spot.available > 0 ? 'Available' : 'Occupied'"></span>
+              </span>
+            </p>
+            <div class="mt-2">
+              <progress
+                class="progress w-full"
+                :value="Math.round(((spot.total - spot.available) / spot.total) * 100)"
+                max="100"
+              ></progress>
+              <p class="text-xs text-right text-gray-500">
+                <span
+                  x-text="Math.round(((spot.total - spot.available) / spot.total) * 100)"
+                ></span>% Occupied
+              </p>
+            </div>
+            <p class="text-xs text-gray-500">
+              <i class="material-icons inline-block text-sm mr-1">people</i>
+              Remaining: <span x-text="spot.available"></span> slots
+            </p>
+            <!-- Details Toggle -->
+            <div class="mt-2">
+              <button
+                class="btn btn-ghost w-full"
+                @click="spot.showDetails = !spot.showDetails"
+              >
+                <i
+                  class="material-icons"
+                  :class="{'rotate-180': spot.showDetails}"
+                  style="transition: transform 0.3s ease;"
+                  >expand_more</i
+                >
+              </button>
+            </div>
+            <div 
+              x-show="spot.showDetails" 
+              x-transition:enter="transition ease-out duration-200"
+              x-transition:enter-start="opacity-0"
+              x-transition:enter-end="opacity-100"
+              x-transition:leave="transition ease-in duration-200"
+              x-transition:leave-start="opacity-100"
+              x-transition:leave-end="opacity-0"
+              class="space-y-2"
+            >
+              <p>
+                <i class="material-icons inline-block text-sm mr-1">near_me</i>
+                <span class="font-bold">Distance:</span>
+                <span x-text="spot.distance + ' miles'"></span>
+              </p>
+              <p>
+                <i class="material-icons inline-block text-sm mr-1">location_on</i>
+                <span class="font-bold">Location:</span>
+                <span x-text="spot.location"></span>
+              </p>
+              <p>
+                <i class="material-icons inline-block text-sm mr-1">attach_money</i>
+                <span class="font-bold">Rate:</span>
+                <span x-text="'$' + spot.rate + '/hour'"></span>
+              </p>
+              <p>
+                <i class="material-icons inline-block text-sm mr-1">group</i>
+                <span class="font-bold">Total Capacity:</span>
+                <span x-text="spot.total"></span> slots
+              </p>
+              <p>
+                <i class="material-icons inline-block text-sm mr-1">access_time</i>
+                <span class="font-bold">Operating Hours:</span>
+                <span x-text="spot.details.operatingHours"></span>
+              </p>
+              <p>
+                <i class="material-icons inline-block text-sm mr-1">star</i>
+                <span class="font-bold">Features:</span>
+                <span x-text="spot.details.features"></span>
+              </p>
+              <div class="mt-4">
+                <button
+                  class="btn btn-outline w-full"
+                  @click="openPayment(spot)"
+                  :disabled="spot.available <= 0"
+                >
+                  Reserve
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Payment Modal -->
+    <div x-show="showModal" x-cloak class="modal modal-open">
+      <div class="modal-box relative">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="closeModal()">✕</button>
+        <h3 class="text-lg font-bold mb-4">Reserve Payment</h3>
+        <template x-if="!isAuthenticated">
+          <div class="text-center py-4">
+            <p class="mb-4">Please login to make a reservation</p>
+            <button @click="showLoginModal = true; closeModal()" class="btn btn-primary">Login</button>
+          </div>
+        </template>
+        <template x-if="isAuthenticated">
+          <div>
+            <p class="mb-4" x-text="selectedSpot ? 'Reserving: ' + selectedSpot.name : ''"></p>
+            <div x-show="!paymentSuccess">
+              <template x-if="selectedSpot && isSpotOpen(selectedSpot.details.operatingHours)">
+                <div>
+                  <div class="form-control mb-3">
+                    <label class="label">
+                      <span class="label-text">Select Booking Range (hours)</span>
+                    </label>
+                    <div x-ref="bookingSlider"></div>
+                    <div class="text-sm mt-2">
+                      <span x-text="'From: ' + computedBookingStart()"></span>
+                      <span x-text="' to ' + computedBookingEnd()"></span>
+                      <span x-text="' (' + (bookingEnd - bookingStart) + ' hour(s))'"></span>
+                    </div>
+                  </div>
+                  <form @submit.prevent="submitPayment()">
+                    <div class="form-control mb-3">
+                      <label class="label"><span class="label-text">Card Number</span></label>
+                      <input type="text" placeholder="1234 5678 9012 3456" class="input input-bordered" required>
+                    </div>
+                    <div class="form-control mb-3">
+                      <label class="label"><span class="label-text">Expiration Date</span></label>
+                      <input type="text" placeholder="MM/YY" class="input input-bordered" required>
+                    </div>
+                    <div class="form-control mb-3">
+                      <label class="label"><span class="label-text">CVV</span></label>
+                      <input type="text" placeholder="123" class="input input-bordered" required>
+                    </div>
+                    <div class="modal-action">
+                      <button type="submit" class="btn btn-outline w-full">Pay</button>
+                    </div>
+                  </form>
+                </div>
+              </template>
+              <template x-if="selectedSpot && !isSpotOpen(selectedSpot.details.operatingHours)">
+                <p class="text-red-500 font-bold">This spot is currently closed for bookings.</p>
+              </template>
+            </div>
+            <div x-show="paymentSuccess" class="flex flex-col items-center">
+              <i class="material-icons text-green-500 text-4xl animate-bounce">check_circle</i>
+              <p class="mt-2 font-bold text-green-500">Payment Successful!</p>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
+    <!-- Booking History Modal -->
+    <div x-show="showHistoryModal" x-cloak class="modal modal-open">
+      <div class="modal-box relative max-h-[80vh] overflow-y-auto space-y-4">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showHistoryModal = false">✕</button>
+        <h3 class="text-lg font-bold mb-4">Booking History</h3>
+        
+        <!-- Active Bookings Section -->
+        <template x-if="bookings.filter(b => new Date(b.end) > new Date()).length > 0">
+          <div>
+            <h4 class="font-bold mb-2">Active Bookings <span class="badge badge-success ml-2">Active</span></h4>
+            <div class="grid grid-cols-1 gap-4">
+              <template x-for="booking in bookings.filter(b => new Date(b.end) > new Date())" :key="booking.id">
+                <div class="card bg-base-100 shadow-md p-4">
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="font-bold" x-text="booking.spotName"></span>
+                    <span class="badge badge-success text-xs">Active</span>
+                  </div>
+                  <p class="text-sm text-gray-600" x-text="new Date(booking.start).toLocaleString() + ' - ' + new Date(booking.end).toLocaleString()"></p>
+                  <div class="text-xs text-gray-500 mt-1">
+                    <p x-text="'Distance: ' + booking.details.distance + ' miles'"></p>
+                    <p x-text="'Rate: $' + booking.details.rate + '/hour'"></p>
+                    <p x-text="'Operating Hours: ' + booking.details.operatingHours"></p>
+                    <p x-text="'Features: ' + booking.details.features"></p>
+                    <p x-text="'Location: ' + booking.details.location"></p>
+                    <p x-text="'Duration: ' + booking.duration + ' hour(s)'"></p>
+                  </div>
+                  <div class="mt-2">
+                    <button class="btn btn-outline w-full" @click="booking.showTicket = !booking.showTicket">
+                      <span x-text="booking.showTicket ? 'Hide Ticket' : 'Show Ticket'"></span>
+                    </button>
+                  </div>
+                  <div x-show="booking.showTicket" x-transition class="mt-2 flex justify-center">
+                    <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + booking.id" alt="Ticket QR Code">
+                  </div>
+                  <div class="mt-2">
+                    <button class="btn btn-outline btn-error w-full" @click="cancelBooking(booking.id)">Cancel Reservation</button>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+        
+        <!-- Past Bookings Section -->
+        <template x-if="bookings.filter(b => new Date(b.end) <= new Date()).length > 0">
+          <div>
+            <h4 class="font-bold mb-2">Past Bookings <span class="badge badge-neutral ml-2">Past</span></h4>
+            <div class="grid grid-cols-1 gap-4">
+              <template x-for="booking in bookings.filter(b => new Date(b.end) <= new Date())" :key="booking.id">
+                <div class="card bg-base-100 shadow-md p-4">
+                  <div class="flex justify-between items-center mb-2">
+                    <span class="font-bold" x-text="booking.spotName"></span>
+                    <span class="badge badge-neutral text-xs">Past</span>
+                  </div>
+                  <p class="text-sm text-gray-600" x-text="new Date(booking.start).toLocaleString() + ' - ' + new Date(booking.end).toLocaleString()"></p>
+                  <div class="text-xs text-gray-500 mt-1">
+                    <p x-text="'Distance: ' + booking.details.distance + ' miles'"></p>
+                    <p x-text="'Rate: $' + booking.details.rate + '/hour'"></p>
+                    <p x-text="'Operating Hours: ' + booking.details.operatingHours"></p>
+                    <p x-text="'Features: ' + booking.details.features"></p>
+                    <p x-text="'Location: ' + booking.details.location"></p>
+                    <p x-text="'Duration: ' + booking.duration + ' hour(s)'"></p>
+                  </div>
+                  <div class="mt-2">
+                    <button class="btn btn-outline w-full" @click="booking.showTicket = !booking.showTicket">
+                      <span x-text="booking.showTicket ? 'Hide Ticket' : 'Show Ticket'"></span>
+                    </button>
+                  </div>
+                  <div x-show="booking.showTicket" x-transition class="mt-2 flex justify-center">
+                    <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + booking.id" alt="Ticket QR Code">
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+        </template>
+        
+        <template x-if="bookings.length === 0">
+          <p class="text-gray-500">No bookings yet.</p>
+        </template>
+      </div>
+    </div>
+
+    <!-- Add Parking Spot Modal -->
+    <div x-show="showAddModal" x-cloak class="modal modal-open">
+      <div class="modal-box relative">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showAddModal = false">✕</button>
+        <h3 class="text-lg font-bold mb-4">Add Parking Spot</h3>
+        <form @submit.prevent="addParkingSpot()">
+          <div class="form-control mb-3">
+            <label class="label"><span class="label-text">Name</span></label>
+            <input
+              type="text"
+              x-model="newSpotName"
+              placeholder="Parking Spot Name"
+              class="input input-bordered"
+              required
+            />
+          </div>
+          <div class="form-control mb-3">
+            <label class="label"><span class="label-text">Distance (miles)</span></label>
+            <input
+              type="number"
+              step="0.1"
+              x-model.number="newSpotDistance"
+              placeholder="e.g., 1.0"
+              class="input input-bordered"
+              required
+            />
+          </div>
+          <div class="form-control mb-3">
+            <label class="label"><span class="label-text">Location</span></label>
+            <input
+              type="text"
+              x-model="newSpotLocation"
+              placeholder="Address"
+              class="input input-bordered"
+              required
+            />
+          </div>
+          <div class="form-control mb-3">
+            <label class="label"><span class="label-text">Rate (per hour)</span></label>
+            <input
+              type="number"
+              step="0.01"
+              x-model.number="newSpotRate"
+              placeholder="e.g., 2.00"
+              class="input input-bordered"
+              required
+            />
+          </div>
+          <div class="form-control mb-3 grid grid-cols-2 gap-3">
+            <div>
+              <label class="label"><span class="label-text">Total Capacity</span></label>
+              <input
+                type="number"
+                x-model.number="newSpotTotal"
+                placeholder="Total"
+                class="input input-bordered"
+                required
+              />
+            </div>
+            <div>
+              <label class="label"><span class="label-text">Available Slots</span></label>
+              <input
+                type="number"
+                x-model.number="newSpotAvailable"
+                placeholder="Available"
+                class="input input-bordered"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-control mb-3">
+            <label class="label"><span class="label-text">Operating Hours</span></label>
+            <input
+              type="text"
+              x-model="newSpotOperatingHours"
+              placeholder="e.g., 8 AM - 8 PM or 24/7"
+              class="input input-bordered"
+              required
+            />
+          </div>
+          <div class="form-control mb-3">
+            <label class="label"><span class="label-text">Features</span></label>
+            <input
+              type="text"
+              x-model="newSpotFeatures"
+              placeholder="e.g., EV Charging, Security Cameras"
+              class="input input-bordered"
+              required
+            />
+          </div>
+          <div class="form-control mb-3">
+            <label class="label"><span class="label-text">Thumbnail Image</span></label>
+            <input
+              type="file"
+              accept="image/*"
+              @change="handleFileUpload($event)"
+              class="file-input file-input-bordered"
+            />
+          </div>
+          <div class="modal-action">
+            <button type="submit" class="btn btn-neutral w-full">Add Spot</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Login Modal -->
+    <div x-show="showLoginModal" x-cloak class="modal modal-open">
+      <div class="modal-box relative">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showLoginModal = false">✕</button>
+        <h3 class="text-lg font-bold mb-4">Login</h3>
+        
+        <!-- Email/Password Login Form -->
+        <form @submit.prevent="loginWithEmail" class="space-y-4">
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Email</span>
+            </label>
+            <input 
+              type="email" 
+              x-model="loginEmail" 
+              class="input input-bordered" 
+              required
+            />
+          </div>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Password</span>
+            </label>
+            <input 
+              type="password" 
+              x-model="loginPassword" 
+              class="input input-bordered" 
+              required
+            />
+          </div>
+          <div class="form-control">
+            <button type="submit" class="btn btn-primary w-full">Login</button>
+          </div>
+        </form>
+
+        <!-- Sign Up Link -->
+        <p class="text-center mt-4">
+          Don't have an account? 
+          <a href="#" @click.prevent="showSignupModal = true; showLoginModal = false" class="text-primary hover:underline">
+            Sign up
+          </a>
+        </p>
+      </div>
+    </div>
+
+    <!-- Sign Up Modal -->
+    <div x-show="showSignupModal" x-cloak class="modal modal-open">
+      <div class="modal-box relative">
+        <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showSignupModal = false">✕</button>
+        <h3 class="text-lg font-bold mb-4">Sign Up</h3>
+        
+        <!-- Email/Password Sign Up Form -->
+        <form @submit.prevent="signupWithEmail" class="space-y-4">
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Name</span>
+            </label>
+            <input 
+              type="text" 
+              x-model="signupName" 
+              class="input input-bordered" 
+              required
+            />
+          </div>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Email</span>
+            </label>
+            <input 
+              type="email" 
+              x-model="signupEmail" 
+              class="input input-bordered" 
+              required
+            />
+          </div>
+          <div class="form-control">
+            <label class="label">
+              <span class="label-text">Password</span>
+            </label>
+            <input 
+              type="password" 
+              x-model="signupPassword" 
+              class="input input-bordered" 
+              required
+            />
+          </div>
+          <div class="form-control">
+            <button type="submit" class="btn btn-primary w-full">Sign Up</button>
+          </div>
+        </form>
+
+        <!-- Login Link -->
+        <p class="text-center mt-4">
+          Already have an account? 
+          <a href="#" @click.prevent="showLoginModal = true; showSignupModal = false" class="text-primary hover:underline">
+            Login
+          </a>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function parkingApp() {
+      return {
+        // Basic states
+        showMap: false,
+        map: null,
+        markerGroup: null,
+        
+        // Sample spots in Münster, Germany
+        spots: [
+          {
+            id: 1,
+            name: "Stubengasse Parking",
+            distance: 0.3,
+            location: "Stubengasse 1, 48143 Münster, Germany",
+            rate: 2,
+            total: 10,
+            available: 5,
+            favorite: false,
+            image: "https://picsum.photos/400/300?random=1",
+            coords: { lat: 51.9621, lng: 7.6262 },
+            details: {
+              operatingHours: "24/7",
+              features: "Security Cameras, EV Charging, Handicapped Access"
+            },
+            showDetails: false
+          },
+          {
+            id: 2,
+            name: "Aegidiimarkt Parking",
+            distance: 0.5,
+            location: "Aegidiimarkt, 48143 Münster, Germany",
+            rate: 2.5,
+            total: 8,
+            available: 3,
+            favorite: false,
+            image: "https://picsum.photos/400/300?random=2",
+            coords: { lat: 51.9626, lng: 7.6222 },
+            details: {
+              operatingHours: "6 AM - 10 PM",
+              features: "Security Cameras, Handicapped Access"
+            },
+            showDetails: false
+          },
+          {
+            id: 3,
+            name: "Theater Car Park",
+            distance: 0.7,
+            location: "Neubrückenstraße 69, 48143 Münster, Germany",
+            rate: 1.5,
+            total: 15,
+            available: 10,
+            favorite: false,
+            image: "https://picsum.photos/400/300?random=3",
+            coords: { lat: 51.9622, lng: 7.6206 },
+            details: {
+              operatingHours: "7 AM - 9 PM",
+              features: "EV Charging, Security Cameras"
+            },
+            showDetails: false
+          }
+        ],
+        
+        selectedSpot: null,
+        showModal: false,
+        paymentSuccess: false,
+        showAddModal: false,
+        showHistoryModal: false,
+        showLoginModal: false,
+        showSignupModal: false,
+        nextId: 4,
+        
+        // New spot form variables
+        newSpotName: '',
+        newSpotDistance: null,
+        newSpotLocation: '',
+        newSpotRate: null,
+        newSpotTotal: null,
+        newSpotAvailable: null,
+        newSpotOperatingHours: '',
+        newSpotFeatures: '',
+        newSpotImage: null,
+        
+        // Filtering
+        searchQuery: '',
+        filterStatus: 'All',
+        filterMaxDistance: null,
+        filterMaxRate: null,
+        filterFeatures: '',
+        filterMinCapacity: null,
+        filterFavorites: false,
+        showAdvancedFilters: false,
+        
+        // Bookings
+        bookings: [],
+        
+        // Booking range slider
+        bookingStart: 0,
+        bookingEnd: 1,
+        reservationHours: 1,
+        
+        // Authentication states
+        loginEmail: '',
+        loginPassword: '',
+        signupName: '',
+        signupEmail: '',
+        signupPassword: '',
+        isAuthenticated: false,
+        currentUser: null,
+        
+        // Initialize the Leaflet map
+        initMap() {
+          // Center on Münster with a moderate zoom
+          this.map = L.map('map', {
+            center: [51.9625, 7.6257],
+            zoom: 13
+          });
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19
+          }).addTo(this.map);
+          this.updateMapMarkers();
+        },
+        
+        // Show/hide the map and fix partial rendering
+        toggleMap() {
+          this.showMap = !this.showMap;
+          if (this.showMap) {
+            this.$nextTick(() => {
+              setTimeout(() => {
+                this.map.invalidateSize();
+              }, 100);
+            });
+          }
+        },
+        
+        // Update markers whenever the spots change
+        updateMapMarkers() {
+          if (this.markerGroup) {
+            this.map.removeLayer(this.markerGroup);
+          }
+          this.markerGroup = L.layerGroup();
+          this.spots.forEach(spot => {
+            if (spot.coords) {
+              let marker = L.marker([spot.coords.lat, spot.coords.lng]);
+              // On marker click, scroll to the corresponding card
+              marker.on('click', () => {
+                const cardEl = document.getElementById('spot-' + spot.id);
+                if (cardEl) {
+                  cardEl.scrollIntoView({ behavior: 'smooth' });
+                }
+              });
+              marker.bindPopup(`<strong>${spot.name}</strong><br>${spot.location}`);
+              marker.addTo(this.markerGroup);
+            }
+          });
+          this.markerGroup.addTo(this.map);
+        },
+
+        // Filter logic for each spot
+        filterSpots(spot) {
+          const searchText = this.searchQuery.toLowerCase();
+          const matchesSearch =
+            this.searchQuery === '' ||
+            spot.name.toLowerCase().includes(searchText) ||
+            spot.location.toLowerCase().includes(searchText) ||
+            spot.details.operatingHours.toLowerCase().includes(searchText) ||
+            spot.details.features.toLowerCase().includes(searchText) ||
+            String(spot.distance).includes(searchText) ||
+            String(spot.rate).includes(searchText);
+          
+          let matchesStatus = false;
+          if (this.filterStatus === 'All') {
+            matchesStatus = true;
+          } else if (this.filterStatus === 'Fully Available') {
+            matchesStatus = spot.available === spot.total;
+          } else if (this.filterStatus === 'Available') {
+            matchesStatus = spot.available > 0;
+          } else if (this.filterStatus === 'Occupied') {
+            matchesStatus = spot.available === 0;
+          }
+          
+          const matchesDistance = !this.filterMaxDistance || spot.distance <= this.filterMaxDistance;
+          const matchesRate = !this.filterMaxRate || spot.rate <= this.filterMaxRate;
+          const matchesFeatures =
+            this.filterFeatures === '' ||
+            spot.details.features.toLowerCase().includes(this.filterFeatures.toLowerCase());
+          const matchesMinCapacity =
+            !this.filterMinCapacity || spot.available >= this.filterMinCapacity;
+          const matchesFavorites = !this.filterFavorites || spot.favorite;
+          
+          return (
+            matchesSearch &&
+            matchesStatus &&
+            matchesDistance &&
+            matchesRate &&
+            matchesFeatures &&
+            matchesMinCapacity &&
+            matchesFavorites
+          );
+        },
+
+        // Initialize the booking slider
+        initializeSlider() {
+          if (this.$refs.bookingSlider && this.selectedSpot) {
+            let maxHours = this.getMaxReservationHours(this.selectedSpot.details.operatingHours);
+            if (this.$refs.bookingSlider.noUiSlider) {
+              this.$refs.bookingSlider.noUiSlider.destroy();
+            }
+            noUiSlider.create(this.$refs.bookingSlider, {
+              start: [0, Math.min(1, maxHours)],
+              connect: true,
+              step: 1,
+              range: {
+                min: 0,
+                max: maxHours
+              }
+            }).on('update', (values) => {
+              this.bookingStart = parseInt(values[0]);
+              this.bookingEnd = parseInt(values[1]);
+            });
+          }
+        },
+        
+        // Operating hours helper
+        getMaxReservationHours(operatingHours) {
+          if (operatingHours.trim().toLowerCase() === "24/7") return 24;
+          let parts = operatingHours.split(" - ");
+          if(parts.length < 2) return 1;
+          function parseHour(timeStr) {
+            let p = timeStr.trim().split(" ");
+            let hr = parseInt(p[0]);
+            let per = p[1].toUpperCase();
+            if(per === "PM" && hr < 12) hr += 12;
+            if(per === "AM" && hr === 12) hr = 0;
+            return hr;
+          }
+          let startHour = parseHour(parts[0]);
+          let endHour = parseHour(parts[1]);
+          let diff = endHour - startHour;
+          if(diff <= 0) diff += 24;
+          return diff;
+        },
+        getOperatingStart(operatingHours) {
+          if (operatingHours.trim().toLowerCase() === "24/7") return 0;
+          let parts = operatingHours.split(" - ");
+          if(parts.length < 2) return 0;
+          let start = parts[0].trim();
+          let p = start.split(" ");
+          let hour = parseInt(p[0]);
+          let period = p[1].toUpperCase();
+          if(period === "PM" && hour < 12) hour += 12;
+          if(period === "AM" && hour === 12) hour = 0;
+          return hour;
+        },
+        computedBookingStart() {
+          let startHour = this.getOperatingStart(this.selectedSpot.details.operatingHours);
+          let bookingHour = startHour + this.bookingStart;
+          return bookingHour + ":00";
+        },
+        computedBookingEnd() {
+          let startHour = this.getOperatingStart(this.selectedSpot.details.operatingHours);
+          let bookingHour = startHour + this.bookingEnd;
+          return bookingHour + ":00";
+        },
+        isSpotOpen(operatingHours) {
+          if (operatingHours.trim().toLowerCase() === "24/7") return true;
+          let startHour = this.getOperatingStart(operatingHours);
+          let max = this.getMaxReservationHours(operatingHours);
+          let endHour = startHour + max;
+          let now = new Date().getHours();
+          return now >= startHour && now < endHour;
+        },
+        
+        // Payment flow
+        openPayment(spot) {
+          if (!this.isAuthenticated) {
+            this.showLoginModal = true;
+            return;
+          }
+          if (!this.isSpotOpen(spot.details.operatingHours)) {
+            alert("This spot is currently closed for bookings.");
+            return;
+          }
+          this.selectedSpot = { ...spot }; // Create a copy of the spot
+          this.bookingStart = 0;
+          this.bookingEnd = 1;
+          this.reservationHours = 1;
+          this.showModal = true;
+          this.$nextTick(() => {
+            this.initializeSlider();
+          });
+        },
+        closeModal() {
+          this.showModal = false;
+          this.paymentSuccess = false;
+        },
+        submitPayment() {
+          if (this.selectedSpot && this.selectedSpot.available > 0 && this.bookingEnd > this.bookingStart) {
+            let today = new Date();
+            let operatingStart = new Date(today);
+            operatingStart.setHours(this.getOperatingStart(this.selectedSpot.details.operatingHours), 0, 0, 0);
+            let bookingStartDate = new Date(operatingStart.getTime() + this.bookingStart * 60 * 60 * 1000);
+            let bookingEndDate = new Date(operatingStart.getTime() + this.bookingEnd * 60 * 60 * 1000);
+            this.selectedSpot.available--;
+            this.bookings.push({
+              id: Date.now(),
+              spotId: this.selectedSpot.id,
+              spotName: this.selectedSpot.name,
+              start: bookingStartDate,
+              end: bookingEndDate,
+              duration: this.bookingEnd - this.bookingStart,
+              details: {
+                distance: this.selectedSpot.distance,
+                location: this.selectedSpot.location,
+                rate: this.selectedSpot.rate,
+                operatingHours: this.selectedSpot.details.operatingHours,
+                features: this.selectedSpot.details.features
+              },
+              showTicket: false
+            });
+          }
+          this.paymentSuccess = true;
+          setTimeout(() => {
+            this.closeModal();
+          }, 3000);
+        },
+        
+        // Cancel and refresh capacity
+        cancelBooking(bookingId) {
+          let booking = this.bookings.find(b => b.id === bookingId);
+          if (booking) {
+            let spot = this.spots.find(s => s.id === booking.spotId);
+            if (spot) {
+              spot.available++;
+            }
+            this.bookings = this.bookings.filter(b => b.id !== bookingId);
+          }
+        },
+
+        // File upload for thumbnail
+        handleFileUpload(event) {
+          let file = event.target.files[0];
+          if (file) {
+            let reader = new FileReader();
+            reader.onload = () => {
+              this.newSpotImage = reader.result;
+            };
+            reader.readAsDataURL(file);
+          }
+        },
+
+        // Add new spot
+        addParkingSpot() {
+          const image = this.newSpotImage
+            ? this.newSpotImage
+            : "https://picsum.photos/400/300?random=" + this.nextId;
+          const newSpot = {
+            id: this.nextId,
+            name: this.newSpotName,
+            distance: this.newSpotDistance,
+            location: this.newSpotLocation,
+            rate: this.newSpotRate,
+            total: this.newSpotTotal,
+            available: this.newSpotAvailable,
+            favorite: false,
+            image: image,
+            // coords can be null if unknown; user can update later
+            coords: null,
+            details: {
+              operatingHours: this.newSpotOperatingHours,
+              features: this.newSpotFeatures
+            },
+            showDetails: false
+          };
+          this.spots.push(newSpot);
+          this.nextId++;
+          this.newSpotName = '';
+          this.newSpotDistance = null;
+          this.newSpotLocation = '';
+          this.newSpotRate = null;
+          this.newSpotTotal = null;
+          this.newSpotAvailable = null;
+          this.newSpotOperatingHours = '';
+          this.newSpotFeatures = '';
+          this.newSpotImage = null;
+          this.showAddModal = false;
+          // If coords are eventually added, call updateMapMarkers()
+        },
+
+        // Authentication methods
+        loginWithEmail() {
+          // Here you would typically make an API call to your backend
+          // For demo purposes, we'll just simulate a successful login
+          this.isAuthenticated = true;
+          this.currentUser = {
+            name: this.loginEmail.split('@')[0],
+            email: this.loginEmail
+          };
+          this.showLoginModal = false;
+          this.loginEmail = '';
+          this.loginPassword = '';
+        },
+
+        signupWithEmail() {
+          // Here you would typically make an API call to your backend
+          // For demo purposes, we'll just simulate a successful signup
+          this.isAuthenticated = true;
+          this.currentUser = {
+            name: this.signupName,
+            email: this.signupEmail
+          };
+          this.showSignupModal = false;
+          this.signupName = '';
+          this.signupEmail = '';
+          this.signupPassword = '';
+        },
+
+        logout() {
+          this.isAuthenticated = false;
+          this.currentUser = null;
+        },
+
+        checkAuthAndShowHistory() {
+          if (!this.isAuthenticated) {
+            this.showLoginModal = true;
+            return;
+          }
+          this.showHistoryModal = true;
+        },
+      }
+    }
+  </script>
+</body>
+</html>
