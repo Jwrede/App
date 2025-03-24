@@ -271,8 +271,8 @@
                 <span class="font-bold">Distance:</span>
                 <span x-text="spot.distance + ' miles'"></span>
               </p>
-              <p>
-                <i class="material-icons inline-block text-sm mr-1">location_on</i>
+              <p class="flex items-center gap-2">
+                <i class="material-icons inline-block text-sm">location_on</i>
                 <span class="font-bold">Location:</span>
                 <span x-text="spot.location"></span>
               </p>
@@ -304,6 +304,14 @@
                 >
                   Reserve
                 </button>
+                <a 
+                  :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(spot.location)"
+                  target="_blank"
+                  class="btn btn-outline w-full mt-2"
+                >
+                  <i class="material-icons text-sm mr-1">map</i>
+                  Open in Google Maps
+                </a>
               </div>
             </div>
           </div>
@@ -394,7 +402,9 @@
                     <p x-text="'Rate: $' + booking.details.rate + '/hour'"></p>
                     <p x-text="'Operating Hours: ' + booking.details.operatingHours"></p>
                     <p x-text="'Features: ' + booking.details.features"></p>
-                    <p x-text="'Location: ' + booking.details.location"></p>
+                    <p class="flex items-center gap-2">
+                      <span x-text="'Location: ' + booking.details.location"></span>
+                    </p>
                     <p x-text="'Duration: ' + booking.duration + ' hour(s)'"></p>
                   </div>
                   <div class="mt-2">
@@ -406,7 +416,10 @@
                     <img :src="'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + booking.id" alt="Ticket QR Code">
                   </div>
                   <div class="mt-2">
-                    <button class="btn btn-outline btn-error w-full" @click="cancelBooking(booking.id)">Cancel Reservation</button>
+                    <button class="btn btn-error w-full" @click="cancelBooking(booking.id)">
+                      <i class="material-icons mr-2">cancel</i>
+                      Cancel Reservation
+                    </button>
                   </div>
                 </div>
               </template>
@@ -431,7 +444,9 @@
                     <p x-text="'Rate: $' + booking.details.rate + '/hour'"></p>
                     <p x-text="'Operating Hours: ' + booking.details.operatingHours"></p>
                     <p x-text="'Features: ' + booking.details.features"></p>
-                    <p x-text="'Location: ' + booking.details.location"></p>
+                    <p class="flex items-center gap-2">
+                      <span x-text="'Location: ' + booking.details.location"></span>
+                    </p>
                     <p x-text="'Duration: ' + booking.duration + ' hour(s)'"></p>
                   </div>
                   <div class="mt-2">
@@ -1025,6 +1040,8 @@
             let spot = this.spots.find(s => s.id === booking.spotId);
             if (spot) {
               spot.available++;
+              // Update the map markers to reflect the new capacity
+              this.updateMapMarkers();
             }
             this.bookings = this.bookings.filter(b => b.id !== bookingId);
           }
