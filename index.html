@@ -72,7 +72,7 @@
     });
   </script>
 </head>
-<body class="bg-gray-100 p-4 min-h-screen">
+<body class="bg-white p-4 min-h-screen">
   <div x-data="parkingApp()" x-init="$nextTick(() => { if (typeof L !== 'undefined') initMap() })" class="container mx-auto min-h-screen">
     <!-- Toggle Map Button -->
     <button
@@ -80,7 +80,7 @@
       class="btn btn-outline w-full mb-4 flex items-center justify-center"
     >
       <i class="material-icons mr-2">map</i>
-      Toggle Map
+      Karte Ein-/Ausblenden
     </button>
 
     <!-- Collapsible Map Container -->
@@ -90,7 +90,7 @@
 
     <!-- Header: Title, History Button, and Add Spot Button -->
     <div class="flex items-center justify-between mb-6">
-      <h1 class="text-5xl font-bold title text-blue-600">S-park</h1>
+      <h1 class="text-5xl font-bold title text-black">S-park</h1>
       <div class="flex items-center space-x-2">
         <template x-if="isAuthenticated">
           <div class="flex items-center space-x-2">
@@ -116,21 +116,24 @@
 
     <!-- Top Filter Controls -->
     <div class="flex flex-col md:flex-row items-center gap-2 mb-4">
-      <input
-        type="text"
-        x-model="searchQuery"
-        placeholder="Search by any attribute..."
-        class="input input-bordered flex-grow"
-      />
+      <div class="relative flex-grow">
+        <i class="material-icons absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">search</i>
+        <input
+          type="text"
+          x-model="searchQuery"
+          placeholder="Nach Attributen suchen..."
+          class="input input-bordered w-full pl-10"
+        />
+      </div>
       <select x-model="filterStatus" class="select select-bordered">
-        <option value="All">All</option>
-        <option value="Fully Available">Fully Available</option>
-        <option value="Available">Available</option>
-        <option value="Occupied">Occupied</option>
+        <option value="All">Alle</option>
+        <option value="Fully Available">Vollständig verfügbar</option>
+        <option value="Available">Verfügbar</option>
+        <option value="Occupied">Belegt</option>
       </select>
       <button
         @click="showAdvancedFilters = !showAdvancedFilters"
-        class="btn btn-outline btn-sm"
+        class="btn btn-outline h-[3rem]"
       >
         <i
           class="material-icons"
@@ -141,7 +144,7 @@
       </button>
     </div>
 
-    <!-- Advanced Filter Controls (Collapsible) -->
+    <!-- Advanced Filter Controls -->
     <div 
       x-show="showAdvancedFilters" 
       x-cloak 
@@ -158,26 +161,26 @@
         type="number"
         step="0.1"
         x-model.number="filterMaxDistance"
-        placeholder="Max Distance (miles)"
+        placeholder="Max. Entfernung (Meilen)"
         class="input input-bordered flex-grow"
       />
       <input
         type="number"
         step="0.01"
         x-model.number="filterMaxRate"
-        placeholder="Max Rate ($/hour)"
+        placeholder="Max. Preis (€/Stunde)"
         class="input input-bordered flex-grow"
       />
       <input
         type="text"
         x-model="filterFeatures"
-        placeholder="Filter by features"
+        placeholder="Nach Funktionen filtern"
         class="input input-bordered flex-grow"
       />
       <input
         type="number"
         x-model.number="filterMinCapacity"
-        placeholder="Min Available Slots"
+        placeholder="Min. verfügbare Plätze"
         class="input input-bordered flex-grow"
       />
       <label class="flex items-center gap-1">
@@ -187,7 +190,7 @@
           :class="{'text-red-500': filterFavorites, 'text-gray-400': !filterFavorites}"
           >favorite</i
         >
-        <span class="text-sm">Favorites Only</span>
+        <span class="text-sm">Nur Favoriten</span>
       </label>
     </div>
 
@@ -199,9 +202,10 @@
       >
         <div
           :id="'spot-' + spot.id"
-          class="card shadow-lg bg-white h-[32rem] overflow-hidden"
+          class="card shadow-lg bg-white overflow-hidden"
+          :class="{'h-[40rem]': !spot.showDetails, 'h-auto': spot.showDetails}"
         >
-          <figure class="h-48">
+          <figure class="h-80">
             <img
               :src="spot.image"
               :alt="spot.name"
@@ -223,7 +227,7 @@
               <i class="material-icons inline-block text-sm mr-1">info</i>
               <span class="font-bold">Status:</span>
               <span class="badge" :class="spot.available > 0 ? 'badge-success' : 'badge-error'">
-                <span x-text="spot.available > 0 ? 'Available' : 'Occupied'"></span>
+                <span x-text="spot.available > 0 ? 'Verfügbar' : 'Belegt'"></span>
               </span>
             </p>
             <div class="mt-2">
@@ -235,12 +239,12 @@
               <p class="text-xs text-right text-gray-500">
                 <span
                   x-text="Math.round(((spot.total - spot.available) / spot.total) * 100)"
-                ></span>% Occupied
+                ></span>% Belegt
               </p>
             </div>
             <p class="text-xs text-gray-500">
               <i class="material-icons inline-block text-sm mr-1">people</i>
-              Remaining: <span x-text="spot.available"></span> slots
+              Verfügbar: <span x-text="spot.available"></span> Plätze
             </p>
             <!-- Details Toggle -->
             <div class="mt-2">
@@ -268,32 +272,32 @@
             >
               <p>
                 <i class="material-icons inline-block text-sm mr-1">near_me</i>
-                <span class="font-bold">Distance:</span>
-                <span x-text="spot.distance + ' miles'"></span>
+                <span class="font-bold">Entfernung:</span>
+                <span x-text="spot.distance + ' Meilen'"></span>
               </p>
               <p class="flex items-center gap-2">
                 <i class="material-icons inline-block text-sm">location_on</i>
-                <span class="font-bold">Location:</span>
+                <span class="font-bold">Standort:</span>
                 <span x-text="spot.location"></span>
               </p>
               <p>
                 <i class="material-icons inline-block text-sm mr-1">attach_money</i>
-                <span class="font-bold">Rate:</span>
-                <span x-text="'$' + spot.rate + '/hour'"></span>
+                <span class="font-bold">Preis:</span>
+                <span x-text="spot.rate + '€/Stunde'"></span>
               </p>
               <p>
                 <i class="material-icons inline-block text-sm mr-1">group</i>
-                <span class="font-bold">Total Capacity:</span>
-                <span x-text="spot.total"></span> slots
+                <span class="font-bold">Gesamtkapazität:</span>
+                <span x-text="spot.total"></span> Plätze
               </p>
               <p>
                 <i class="material-icons inline-block text-sm mr-1">access_time</i>
-                <span class="font-bold">Operating Hours:</span>
+                <span class="font-bold">Öffnungszeiten:</span>
                 <span x-text="spot.details.operatingHours"></span>
               </p>
               <p>
                 <i class="material-icons inline-block text-sm mr-1">star</i>
-                <span class="font-bold">Features:</span>
+                <span class="font-bold">Funktionen:</span>
                 <span x-text="spot.details.features"></span>
               </p>
               <div class="mt-4">
@@ -302,7 +306,7 @@
                   @click="openPayment(spot)"
                   :disabled="spot.available <= 0"
                 >
-                  Reserve
+                  Reservieren
                 </button>
                 <a 
                   :href="'https://www.google.com/maps/search/?api=1&query=' + encodeURIComponent(spot.location)"
@@ -310,7 +314,7 @@
                   class="btn btn-outline w-full mt-2"
                 >
                   <i class="material-icons text-sm mr-1">map</i>
-                  Open in Google Maps
+                  In Google Maps öffnen
                 </a>
               </div>
             </div>
@@ -323,56 +327,56 @@
     <div x-show="showModal" x-cloak class="modal modal-open">
       <div class="modal-box relative">
         <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="closeModal()">✕</button>
-        <h3 class="text-lg font-bold mb-4">Reserve Payment</h3>
+        <h3 class="text-lg font-bold mb-4">Reservierung bezahlen</h3>
         <template x-if="!isAuthenticated">
           <div class="text-center py-4">
-            <p class="mb-4">Please login to make a reservation</p>
-            <button @click="showLoginModal = true; closeModal()" class="btn btn-primary">Login</button>
+            <p class="mb-4">Bitte melden Sie sich an, um eine Reservierung vorzunehmen</p>
+            <button @click="showLoginModal = true; closeModal()" class="btn btn-primary">Anmelden</button>
           </div>
         </template>
         <template x-if="isAuthenticated">
           <div>
-            <p class="mb-4" x-text="selectedSpot ? 'Reserving: ' + selectedSpot.name : ''"></p>
+            <p class="mb-4" x-text="selectedSpot ? 'Reservierung für: ' + selectedSpot.name : ''"></p>
             <div x-show="!paymentSuccess">
               <template x-if="selectedSpot && isSpotOpen(selectedSpot.details.operatingHours)">
                 <div>
                   <div class="form-control mb-3">
                     <label class="label">
-                      <span class="label-text">Select Booking Range (hours)</span>
+                      <span class="label-text">Buchungszeitraum wählen (Stunden)</span>
                     </label>
                     <div x-ref="bookingSlider"></div>
                     <div class="text-sm mt-2">
-                      <span x-text="'From: ' + computedBookingStart()"></span>
-                      <span x-text="' to ' + computedBookingEnd()"></span>
-                      <span x-text="' (' + (bookingEnd - bookingStart) + ' hour(s))'"></span>
+                      <span x-text="'Von: ' + computedBookingStart()"></span>
+                      <span x-text="' bis ' + computedBookingEnd()"></span>
+                      <span x-text="' (' + (bookingEnd - bookingStart) + ' Stunde(n))'"></span>
                     </div>
                   </div>
                   <form @submit.prevent="submitPayment()">
                     <div class="form-control mb-3">
-                      <label class="label"><span class="label-text">Card Number</span></label>
+                      <label class="label"><span class="label-text">Kartennummer</span></label>
                       <input type="text" placeholder="1234 5678 9012 3456" class="input input-bordered" required>
                     </div>
                     <div class="form-control mb-3">
-                      <label class="label"><span class="label-text">Expiration Date</span></label>
-                      <input type="text" placeholder="MM/YY" class="input input-bordered" required>
+                      <label class="label"><span class="label-text">Ablaufdatum</span></label>
+                      <input type="text" placeholder="MM/JJ" class="input input-bordered" required>
                     </div>
                     <div class="form-control mb-3">
                       <label class="label"><span class="label-text">CVV</span></label>
                       <input type="text" placeholder="123" class="input input-bordered" required>
                     </div>
                     <div class="modal-action">
-                      <button type="submit" class="btn btn-outline w-full">Pay</button>
+                      <button type="submit" class="btn btn-outline w-full">Bezahlen</button>
                     </div>
                   </form>
                 </div>
               </template>
               <template x-if="selectedSpot && !isSpotOpen(selectedSpot.details.operatingHours)">
-                <p class="text-red-500 font-bold">This spot is currently closed for bookings.</p>
+                <p class="text-red-500 font-bold">Dieser Parkplatz ist derzeit für Reservierungen geschlossen.</p>
               </template>
             </div>
             <div x-show="paymentSuccess" class="flex flex-col items-center">
               <i class="material-icons text-green-500 text-4xl animate-bounce">check_circle</i>
-              <p class="mt-2 font-bold text-green-500">Payment Successful!</p>
+              <p class="mt-2 font-bold text-green-500">Zahlung erfolgreich!</p>
             </div>
           </div>
         </template>
@@ -383,33 +387,33 @@
     <div x-show="showHistoryModal" x-cloak class="modal modal-open">
       <div class="modal-box relative max-h-[80vh] overflow-y-auto space-y-4">
         <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showHistoryModal = false">✕</button>
-        <h3 class="text-lg font-bold mb-4">Booking History</h3>
+        <h3 class="text-lg font-bold mb-4">Buchungsverlauf</h3>
         
         <!-- Active Bookings Section -->
         <template x-if="bookings.filter(b => new Date(b.end) > new Date()).length > 0">
           <div>
-            <h4 class="font-bold mb-2">Active Bookings <span class="badge badge-success ml-2">Active</span></h4>
+            <h4 class="font-bold mb-2">Aktive Buchungen <span class="badge badge-success ml-2">Aktiv</span></h4>
             <div class="grid grid-cols-1 gap-4">
               <template x-for="booking in bookings.filter(b => new Date(b.end) > new Date())" :key="booking.id">
                 <div class="card bg-base-100 shadow-md p-4">
                   <div class="flex justify-between items-center mb-2">
                     <span class="font-bold" x-text="booking.spotName"></span>
-                    <span class="badge badge-success text-xs">Active</span>
+                    <span class="badge badge-success text-xs">Aktiv</span>
                   </div>
                   <p class="text-sm text-gray-600" x-text="new Date(booking.start).toLocaleString() + ' - ' + new Date(booking.end).toLocaleString()"></p>
                   <div class="text-xs text-gray-500 mt-1">
-                    <p x-text="'Distance: ' + booking.details.distance + ' miles'"></p>
-                    <p x-text="'Rate: $' + booking.details.rate + '/hour'"></p>
-                    <p x-text="'Operating Hours: ' + booking.details.operatingHours"></p>
-                    <p x-text="'Features: ' + booking.details.features"></p>
+                    <p x-text="'Entfernung: ' + booking.details.distance + ' Meilen'"></p>
+                    <p x-text="'Preis: ' + booking.details.rate + '€/Stunde'"></p>
+                    <p x-text="'Öffnungszeiten: ' + booking.details.operatingHours"></p>
+                    <p x-text="'Funktionen: ' + booking.details.features"></p>
                     <p class="flex items-center gap-2">
-                      <span x-text="'Location: ' + booking.details.location"></span>
+                      <span x-text="'Standort: ' + booking.details.location"></span>
                     </p>
-                    <p x-text="'Duration: ' + booking.duration + ' hour(s)'"></p>
+                    <p x-text="'Dauer: ' + booking.duration + ' Stunde(n)'"></p>
                   </div>
                   <div class="mt-2">
                     <button class="btn btn-outline w-full" @click="booking.showTicket = !booking.showTicket">
-                      <span x-text="booking.showTicket ? 'Hide Ticket' : 'Show Ticket'"></span>
+                      <span x-text="booking.showTicket ? 'Ticket ausblenden' : 'Ticket anzeigen'"></span>
                     </button>
                   </div>
                   <div x-show="booking.showTicket" x-transition class="mt-2 flex justify-center">
@@ -418,7 +422,7 @@
                   <div class="mt-2">
                     <button class="btn btn-error w-full" @click="cancelBooking(booking.id)">
                       <i class="material-icons mr-2">cancel</i>
-                      Cancel Reservation
+                      Reservierung stornieren
                     </button>
                   </div>
                 </div>
@@ -430,28 +434,28 @@
         <!-- Past Bookings Section -->
         <template x-if="bookings.filter(b => new Date(b.end) <= new Date()).length > 0">
           <div>
-            <h4 class="font-bold mb-2">Past Bookings <span class="badge badge-neutral ml-2">Past</span></h4>
+            <h4 class="font-bold mb-2">Vergangene Buchungen <span class="badge badge-neutral ml-2">Vergangen</span></h4>
             <div class="grid grid-cols-1 gap-4">
               <template x-for="booking in bookings.filter(b => new Date(b.end) <= new Date())" :key="booking.id">
                 <div class="card bg-base-100 shadow-md p-4">
                   <div class="flex justify-between items-center mb-2">
                     <span class="font-bold" x-text="booking.spotName"></span>
-                    <span class="badge badge-neutral text-xs">Past</span>
+                    <span class="badge badge-neutral text-xs">Vergangen</span>
                   </div>
                   <p class="text-sm text-gray-600" x-text="new Date(booking.start).toLocaleString() + ' - ' + new Date(booking.end).toLocaleString()"></p>
                   <div class="text-xs text-gray-500 mt-1">
-                    <p x-text="'Distance: ' + booking.details.distance + ' miles'"></p>
-                    <p x-text="'Rate: $' + booking.details.rate + '/hour'"></p>
-                    <p x-text="'Operating Hours: ' + booking.details.operatingHours"></p>
-                    <p x-text="'Features: ' + booking.details.features"></p>
+                    <p x-text="'Entfernung: ' + booking.details.distance + ' Meilen'"></p>
+                    <p x-text="'Preis: ' + booking.details.rate + '€/Stunde'"></p>
+                    <p x-text="'Öffnungszeiten: ' + booking.details.operatingHours"></p>
+                    <p x-text="'Funktionen: ' + booking.details.features"></p>
                     <p class="flex items-center gap-2">
-                      <span x-text="'Location: ' + booking.details.location"></span>
+                      <span x-text="'Standort: ' + booking.details.location"></span>
                     </p>
-                    <p x-text="'Duration: ' + booking.duration + ' hour(s)'"></p>
+                    <p x-text="'Dauer: ' + booking.duration + ' Stunde(n)'"></p>
                   </div>
                   <div class="mt-2">
                     <button class="btn btn-outline w-full" @click="booking.showTicket = !booking.showTicket">
-                      <span x-text="booking.showTicket ? 'Hide Ticket' : 'Show Ticket'"></span>
+                      <span x-text="booking.showTicket ? 'Ticket ausblenden' : 'Ticket anzeigen'"></span>
                     </button>
                   </div>
                   <div x-show="booking.showTicket" x-transition class="mt-2 flex justify-center">
@@ -464,7 +468,7 @@
         </template>
         
         <template x-if="bookings.length === 0">
-          <p class="text-gray-500">No bookings yet.</p>
+          <p class="text-gray-500">Noch keine Buchungen vorhanden.</p>
         </template>
       </div>
     </div>
@@ -473,94 +477,94 @@
     <div x-show="showAddModal" x-cloak class="modal modal-open">
       <div class="modal-box relative">
         <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showAddModal = false">✕</button>
-        <h3 class="text-lg font-bold mb-4">Add Parking Spot</h3>
+        <h3 class="text-lg font-bold mb-4">Parkplatz hinzufügen</h3>
         <form @submit.prevent="addParkingSpot()">
           <div class="form-control mb-3">
             <label class="label"><span class="label-text">Name</span></label>
             <input
               type="text"
               x-model="newSpotName"
-              placeholder="Parking Spot Name"
+              placeholder="Name des Parkplatzes"
               class="input input-bordered"
               required
             />
           </div>
           <div class="form-control mb-3">
-            <label class="label"><span class="label-text">Distance (miles)</span></label>
+            <label class="label"><span class="label-text">Entfernung (Meilen)</span></label>
             <input
               type="number"
               step="0.1"
               x-model.number="newSpotDistance"
-              placeholder="e.g., 1.0"
+              placeholder="z.B. 1.0"
               class="input input-bordered"
               required
             />
           </div>
           <div class="form-control mb-3">
-            <label class="label"><span class="label-text">Location</span></label>
+            <label class="label"><span class="label-text">Standort</span></label>
             <input
               type="text"
               x-model="newSpotLocation"
-              placeholder="Address"
+              placeholder="Adresse"
               class="input input-bordered"
               required
             />
           </div>
           <div class="form-control mb-3">
-            <label class="label"><span class="label-text">Rate (per hour)</span></label>
+            <label class="label"><span class="label-text">Preis (pro Stunde)</span></label>
             <input
               type="number"
               step="0.01"
               x-model.number="newSpotRate"
-              placeholder="e.g., 2.00"
+              placeholder="z.B. 2.00"
               class="input input-bordered"
               required
             />
           </div>
           <div class="form-control mb-3 grid grid-cols-2 gap-3">
             <div>
-              <label class="label"><span class="label-text">Total Capacity</span></label>
+              <label class="label"><span class="label-text">Gesamtkapazität</span></label>
               <input
                 type="number"
                 x-model.number="newSpotTotal"
-                placeholder="Total"
+                placeholder="Gesamt"
                 class="input input-bordered"
                 required
               />
             </div>
             <div>
-              <label class="label"><span class="label-text">Available Slots</span></label>
+              <label class="label"><span class="label-text">Verfügbare Plätze</span></label>
               <input
                 type="number"
                 x-model.number="newSpotAvailable"
-                placeholder="Available"
+                placeholder="Verfügbar"
                 class="input input-bordered"
                 required
               />
             </div>
           </div>
           <div class="form-control mb-3">
-            <label class="label"><span class="label-text">Operating Hours</span></label>
+            <label class="label"><span class="label-text">Öffnungszeiten</span></label>
             <input
               type="text"
               x-model="newSpotOperatingHours"
-              placeholder="e.g., 8 AM - 8 PM or 24/7"
+              placeholder="z.B. 8:00 - 20:00 oder 24/7"
               class="input input-bordered"
               required
             />
           </div>
           <div class="form-control mb-3">
-            <label class="label"><span class="label-text">Features</span></label>
+            <label class="label"><span class="label-text">Funktionen</span></label>
             <input
               type="text"
               x-model="newSpotFeatures"
-              placeholder="e.g., EV Charging, Security Cameras"
+              placeholder="z.B. E-Ladestation, Überwachungskameras"
               class="input input-bordered"
               required
             />
           </div>
           <div class="form-control mb-3">
-            <label class="label"><span class="label-text">Thumbnail Image</span></label>
+            <label class="label"><span class="label-text">Vorschaubild</span></label>
             <input
               type="file"
               accept="image/*"
@@ -569,7 +573,7 @@
             />
           </div>
           <div class="modal-action">
-            <button type="submit" class="btn btn-neutral w-full">Add Spot</button>
+            <button type="submit" class="btn btn-neutral w-full">Parkplatz hinzufügen</button>
           </div>
         </form>
       </div>
@@ -579,13 +583,13 @@
     <div x-show="showLoginModal" x-cloak class="modal modal-open">
       <div class="modal-box relative">
         <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showLoginModal = false">✕</button>
-        <h3 class="text-lg font-bold mb-4">Login</h3>
+        <h3 class="text-lg font-bold mb-4">Anmelden</h3>
         
         <!-- Email/Password Login Form -->
         <form @submit.prevent="loginWithEmail" class="space-y-4">
           <div class="form-control">
             <label class="label">
-              <span class="label-text">Email</span>
+              <span class="label-text">E-Mail</span>
             </label>
             <input 
               type="email" 
@@ -596,7 +600,7 @@
           </div>
           <div class="form-control">
             <label class="label">
-              <span class="label-text">Password</span>
+              <span class="label-text">Passwort</span>
             </label>
             <input 
               type="password" 
@@ -606,15 +610,15 @@
             />
           </div>
           <div class="form-control">
-            <button type="submit" class="btn btn-primary w-full">Login</button>
+            <button type="submit" class="btn btn-primary w-full">Anmelden</button>
           </div>
         </form>
 
         <!-- Sign Up Link -->
         <p class="text-center mt-4">
-          Don't have an account? 
+          Noch kein Konto? 
           <a href="#" @click.prevent="showSignupModal = true; showLoginModal = false" class="text-primary hover:underline">
-            Sign up
+            Registrieren
           </a>
         </p>
       </div>
@@ -624,7 +628,7 @@
     <div x-show="showSignupModal" x-cloak class="modal modal-open">
       <div class="modal-box relative">
         <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" @click="showSignupModal = false">✕</button>
-        <h3 class="text-lg font-bold mb-4">Sign Up</h3>
+        <h3 class="text-lg font-bold mb-4">Registrieren</h3>
         
         <!-- Email/Password Sign Up Form -->
         <form @submit.prevent="signupWithEmail" class="space-y-4">
@@ -641,7 +645,7 @@
           </div>
           <div class="form-control">
             <label class="label">
-              <span class="label-text">Email</span>
+              <span class="label-text">E-Mail</span>
             </label>
             <input 
               type="email" 
@@ -652,7 +656,7 @@
           </div>
           <div class="form-control">
             <label class="label">
-              <span class="label-text">Password</span>
+              <span class="label-text">Passwort</span>
             </label>
             <input 
               type="password" 
@@ -662,15 +666,15 @@
             />
           </div>
           <div class="form-control">
-            <button type="submit" class="btn btn-primary w-full">Sign Up</button>
+            <button type="submit" class="btn btn-primary w-full">Registrieren</button>
           </div>
         </form>
 
         <!-- Login Link -->
         <p class="text-center mt-4">
-          Already have an account? 
+          Bereits ein Konto? 
           <a href="#" @click.prevent="showLoginModal = true; showSignupModal = false" class="text-primary hover:underline">
-            Login
+            Anmelden
           </a>
         </p>
       </div>
@@ -689,14 +693,14 @@
         spots: [
           {
             id: 1,
-            name: "Stubengasse Parking",
+            name: "Parkhaus Stubengasse",
             distance: 0.3,
             location: "Stubengasse 1, 48143 Münster, Germany",
             rate: 2,
             total: 10,
             available: 5,
             favorite: false,
-            image: "https://picsum.photos/400/300?random=1",
+            image: "https://www.stadt-muenster.de/ms/tiefbauamt/assets/ph11/11_files/stubengasse_haus_foto.jpg",
             coords: { lat: 51.9621, lng: 7.6262 },
             details: {
               operatingHours: "24/7",
@@ -706,14 +710,14 @@
           },
           {
             id: 2,
-            name: "Aegidiimarkt Parking",
+            name: "Parkhaus Aegidiimarkt",
             distance: 0.5,
             location: "Aegidiimarkt, 48143 Münster, Germany",
             rate: 2.5,
             total: 8,
             available: 3,
             favorite: false,
-            image: "https://picsum.photos/400/300?random=2",
+            image: "https://www.stadt-muenster.de/ms/tiefbauamt/assets/ph7/7_files/aegidii_foto.jpg",
             coords: { lat: 51.9626, lng: 7.6222 },
             details: {
               operatingHours: "6 AM - 10 PM",
@@ -723,14 +727,14 @@
           },
           {
             id: 3,
-            name: "Theater Car Park",
+            name: "Parkhaus Theater",
             distance: 0.7,
             location: "Neubrückenstraße 69, 48143 Münster, Germany",
             rate: 1.5,
             total: 15,
             available: 10,
             favorite: false,
-            image: "https://picsum.photos/400/300?random=3",
+            image: "https://www.stadt-muenster.de/ms/tiefbauamt/assets/ph1/1_files/theater_foto.jpg",
             coords: { lat: 51.9622, lng: 7.6206 },
             details: {
               operatingHours: "7 AM - 9 PM",
